@@ -92,15 +92,20 @@ class MyPlayer(BasePokerPlayer):
         self.opponent = None
         self.emulator = Emulator()
         self.emulator.set_game_rule(2,1,10,0)
+        self.current_cost = 10
+        self.random_game_state = None 
         
     def declare_action(self, valid_actions, hole_card, round_state):
         self.round_state = round_state
         self.table = {}
-        
+        print(self.current_cost)
         self.my_uuid = round_state['seats'][round_state['next_player']]['uuid']
-        current_cost = 0
         self.my_cards = gen_cards(hole_card)
         self.community_card = gen_cards(round_state['community_card'])
+        self.random_game_state = None
+
+        if round_state['seats'][round_state['big_blind_pos']]['uuid'] == self.my_uuid:
+            self.current_cost = 20
 
         if not self.belief:
             self.initialize_belief()
@@ -115,16 +120,28 @@ class MyPlayer(BasePokerPlayer):
             self.opponent = ReasonablePlayer(opponent_cards, round_state,self.belief) ## Should not be self.belief, fix later
                 # print(time()-start)
             root = Node(self.my_cards, opponent_cards,self.community_card, game_state, round_state, round_state['street'], prob, 
-                        [], self, self.opponent, self.my_uuid, self.emulator, current_cost)
+                        [], self, self.opponent, self.my_uuid, self.emulator, self.current_cost)
             # start= time()
             root.update_expected_table()
             # print(time()-start)
             # print("____")
             # pp.pprint(self.table)
             # sleep(5)
+            if not self.random_game_state:
+                self.random_game_state = game_state
+                
         print(time()-start)
+                
         strategy = max(self.table, key = self.table.get)
         action = strategy.split()[0]
+        
+        histories = self.emulator.apply_action(self.random_game_state, action)[1][0]['round_state']['action_histories']
+        if histories.get(round_state['street']):
+            action_result = histories[round_state['street']][-1]
+            if action_result['action'] != 'FOLD':
+                print(action_result)
+                self.current_cost += action_result['paid']
+        
             # print(action)
         # self.update_opp_belief(opponent_belief)
         return action
