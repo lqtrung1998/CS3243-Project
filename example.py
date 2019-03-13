@@ -11,4 +11,4 @@ config.register_player(name="f1", algorithm=RandomPlayer())
 config.register_player(name="MyPlayer", algorithm=MyPlayer())
 
 
-game_result = start_poker(config, verbose=0)
+game_result = start_poker(config, verbose=1)
