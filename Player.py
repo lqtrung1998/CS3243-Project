@@ -284,7 +284,7 @@ class Node():
                     child_node.update_expected_table()
             else:
                 opponent_action_prob = self.opponent_player.actions()
-                if actions < 3:
+                if len(actions) < 3:
                     opponent_action_prob['fold'] += opponent_action_prob['raise']
                 for action in actions:
                     child_node = self.perform_action(action, opponent_action_prob[action], False)
