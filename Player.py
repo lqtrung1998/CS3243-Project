@@ -92,15 +92,23 @@ class MyPlayer(BasePokerPlayer):
         self.opponent = None
         self.emulator = Emulator()
         self.emulator.set_game_rule(2,1,10,0)
+
+        self.current_cost = 10
+        self.random_game_state = None 
+
         
     def declare_action(self, valid_actions, hole_card, round_state):
         self.round_state = round_state
         self.table = {}
-        
+
+        print(self.current_cost)
         self.my_uuid = round_state['seats'][round_state['next_player']]['uuid']
-        current_cost = 0
         self.my_cards = gen_cards(hole_card)
         self.community_card = gen_cards(round_state['community_card'])
+        self.random_game_state = None
+
+        if round_state['seats'][round_state['big_blind_pos']]['uuid'] == self.my_uuid:
+            self.current_cost = 20
 
         if not self.belief:
             self.initialize_belief()
@@ -109,6 +117,7 @@ class MyPlayer(BasePokerPlayer):
         opponent_card_prob = self.belief['Probability']
         pp = pprint.PrettyPrinter(indent =2)
         start = time() 
+
         print("My_Cards:",list(map(lambda x: x.__str__(), self.my_cards)))
         print("community_cards:",list(map(lambda x: x.__str__(), self.community_card)))
         for opponent_cards, prob in zip(posibile_opponent_cards, opponent_card_prob):
@@ -120,16 +129,28 @@ class MyPlayer(BasePokerPlayer):
             self.opponent = ReasonablePlayer(opponent_cards, round_state,self.belief) ## Should not be self.belief, fix later
                 # print(time()-start)
             root = Node(self.my_cards, opponent_cards,self.community_card, game_state, round_state, round_state['street'], prob, 
-                        [], self, self.opponent, self.my_uuid, self.emulator, current_cost)
+                        [], self, self.opponent, self.my_uuid, self.emulator, self.current_cost)
             # start= time()
             root.update_expected_table()
             # print(time()-start)
             # print("____")
+            # pp.pprint(self.table)
             # sleep(5)
-        pp.pprint(self.table)
+            if not self.random_game_state:
+                self.random_game_state = game_state
+        pp.pprint(self.table)        
         print(time()-start)
+                
         strategy = max(self.table, key = self.table.get)
         action = strategy.split()[0]
+        
+        histories = self.emulator.apply_action(self.random_game_state, action)[1][0]['round_state']['action_histories']
+        if histories.get(round_state['street']):
+            action_result = histories[round_state['street']][-1]
+            if action_result['action'] != 'FOLD':
+                print(action_result)
+                self.current_cost += action_result['paid']
+        
             # print(action)
         # self.update_opp_belief(opponent_belief)
         return action
@@ -154,6 +175,7 @@ class MyPlayer(BasePokerPlayer):
     def update_belief(self):
         street = self.round_state['street']
         previous_action = self.game_update[-1]['action'] if self.game_state[-1]['player_uuid'] == self.my_uuid else self.game_update[-2]['action']
+
         strong_update = 0
         week_update = 0
 
@@ -272,7 +294,9 @@ class Node():
                     child_node.update_expected_table()
             else:
                 opponent_action_prob = self.opponent_player.actions()
-                if actions < 3:
+
+                if len(actions) < 3:
+
                     opponent_action_prob['fold'] += opponent_action_prob['raise']
                 for action in actions:
                     child_node = self.perform_action(action, opponent_action_prob[action], False)
