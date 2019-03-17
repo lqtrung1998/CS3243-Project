@@ -35,9 +35,9 @@ class ReasonablePlayer():
 
         Cards = [[Card.from_id(card1),Card.from_id(card2)]
                                 for card1,card2 in itertools.combinations(unused,2)]
-        # start= time()
+        start= time()
         Cards_Strength = list(map(lambda x: hand_strength(x,self.round_state['community_card']),Cards))
-        # print(time()-start)
+        print('op',time()-start)
         # print("+++++++++")
         self.belief['Cards'] = list(zip(Cards,Cards_Strength))
         self.belief['Probability'] = np.ones(len(Cards))/len(Cards)
@@ -63,7 +63,7 @@ class ReasonablePlayer():
             return
         previous_action = self.round_state['action_histories'][street][-1]
         strong_update = 0
-        week_update = 0
+        weak_update = 0
 
         if previous_action == 'raise':
             count = 0
@@ -73,7 +73,7 @@ class ReasonablePlayer():
                 else:
                     break;
             self.belief['Probability'][:count] += strong_update
-            self.belief['Probability'][count:] -= week_update
+            self.belief['Probability'][count:] -= weak_update
             self.belief['Probability'] /= sum(self.belief['Probability'])
 
     def copy_player(self):
@@ -86,6 +86,7 @@ class ReasonablePlayer():
 class MyPlayer(BasePokerPlayer):
     def __init__(self):
         self.table = {}
+        self.table1 = {}
         self.belief = {}
         # self.opponent_belief ={}
         self.uuid = None
@@ -100,8 +101,8 @@ class MyPlayer(BasePokerPlayer):
     def declare_action(self, valid_actions, hole_card, round_state):
         self.round_state = round_state
         self.table = {}
-
-        print(self.current_cost)
+       
+        #print(self.current_cost)
         self.my_uuid = round_state['seats'][round_state['next_player']]['uuid']
         self.my_cards = gen_cards(hole_card)
         self.community_card = gen_cards(round_state['community_card'])
@@ -116,39 +117,32 @@ class MyPlayer(BasePokerPlayer):
         posibile_opponent_cards = [x[0] for x in self.belief['Cards']]
         opponent_card_prob = self.belief['Probability']
         pp = pprint.PrettyPrinter(indent =2)
-        start = time() 
-
-        print("My_Cards:",list(map(lambda x: x.__str__(), self.my_cards)))
-        print("community_cards:",list(map(lambda x: x.__str__(), self.community_card)))
+        
         for opponent_cards, prob in zip(posibile_opponent_cards, opponent_card_prob):
-            # start = time()  
-            # print("My_Cards:",list(map(lambda x: x.__str__(), self.my_cards)))
-            # print("community_cards:",list(map(lambda x: x.__str__(), self.community_card)))
-            # print("opponent_cards:",list(map(lambda x: x.__str__(), opponent_cards)),prob)       
             game_state = setup_game_state(round_state, self.my_cards, opponent_cards, self.my_uuid)
             self.opponent = ReasonablePlayer(opponent_cards, round_state,self.belief) ## Should not be self.belief, fix later
-                # print(time()-start)
+
             root = Node(self.my_cards, opponent_cards,self.community_card, game_state, round_state, round_state['street'], prob, 
                         [], self, self.opponent, self.my_uuid, self.emulator, self.current_cost)
             # start= time()
             root.update_expected_table()
-            # print(time()-start)
-            # print("____")
+
             # pp.pprint(self.table)
             # sleep(5)
             if not self.random_game_state:
                 self.random_game_state = game_state
-        pp.pprint(self.table)        
-        print(time()-start)
-                
-        strategy = max(self.table, key = self.table.get)
+        pp.pprint(self.table)
+        #print(time()-start)
+        #sleep(5000)
+        strategies = table_to_strategies(self.table)
+        pp.pprint(strategies)
+        strategy = max(strategies, key = self.table.get)
         action = strategy.split()[0]
         
         histories = self.emulator.apply_action(self.random_game_state, action)[1][0]['round_state']['action_histories']
         if histories.get(round_state['street']):
             action_result = histories[round_state['street']][-1]
             if action_result['action'] != 'FOLD':
-                print(action_result)
                 self.current_cost += action_result['paid']
         
             # print(action)
@@ -163,7 +157,9 @@ class MyPlayer(BasePokerPlayer):
 
         Cards =  [[Card.from_id(card1),Card.from_id(card2)] 
                                 for card1,card2 in itertools.combinations(unused,2)]
-        Cards_Strength = list(map(lambda x: hand_strength(x,self.community_card),Cards))
+        start = time()
+        Cards_Strength = list(map(lambda x: hand_strength(x,self.community_card, self.my_cards),Cards))
+        print('my',time()-start)
 
         self.belief['Cards'] = list(zip(Cards,Cards_Strength))
         self.belief['Probability'] = np.ones(len(Cards))/len(Cards)
@@ -177,7 +173,7 @@ class MyPlayer(BasePokerPlayer):
         previous_action = self.game_update[-1]['action'] if self.game_state[-1]['player_uuid'] == self.my_uuid else self.game_update[-2]['action']
 
         strong_update = 0
-        week_update = 0
+        weak_update = 0
 
         if previous_action == 'raise':
             count = 0
@@ -187,7 +183,7 @@ class MyPlayer(BasePokerPlayer):
                 else:
                     break;
             self.belief['Probability'][:count] += strong_update
-            self.belief['Probability'][count:] -= week_update
+            self.belief['Probability'][count:] -= weak_update
             self.belief['Probability'] /= sum(self.belief['Probability'])
     
     def update_table(self, my_strategy, gain):
@@ -197,6 +193,8 @@ class MyPlayer(BasePokerPlayer):
             self.table[key] += gain
         else:
             self.table[key] = gain
+            
+
             
     def receive_game_start_message(self, game_info):
         pass
@@ -212,8 +210,32 @@ class MyPlayer(BasePokerPlayer):
 
     def receive_round_result_message(self, winners, hand_info, round_state):
         pass
-            
+    
 
+def table_to_strategies(path_table):
+    table = path_table.copy()
+    strategies = path_table.copy()
+    keys = list(table.keys())
+    
+    for i in range(len(keys) - 1):
+        key = keys[i]
+        length = len(key)
+        for j in range(i+1, len(keys)):
+            key1 = keys[j]
+            if key1[:length] == key:
+                strategies[key1] += table[key]
+    
+    for i in range(len(keys) - 1):
+        key = keys[i]
+        length = len(key)
+        for j in range(i+1, len(keys)):
+            key1 = keys[j]
+            if key1[:length] == key:
+                if strategies.get(key):
+                    del strategies[key]
+
+    return strategies
+        
         
 def setup_game_state(round_state, my_hole_cards, opponent_hole_cards, my_uuid):
     game_state = restore_game_state(round_state)
@@ -264,10 +286,11 @@ class Node():
         copy_opponent = self.opponent_player.copy_player()
         if is_my_player: 
             copy_opponent.update_belief()
+
             if action != 'fold':
-                new_current_cost += events[0]['round_state']['action_histories'][self.street][-1]['paid']            
-            
-        return Node(self.my_hole_cards,
+                new_current_cost += events[0]['round_state']['action_histories'][self.street][-1]['paid']
+
+            return Node(self.my_hole_cards,
                     self.opponent_hole_cards,
                     self.community_cards,
                     state, events[0]['round_state'], 
@@ -278,13 +301,22 @@ class Node():
                     self.my_uuid,
                     self.emulator,
                     new_current_cost)
+            
+        return Node(self.my_hole_cards,
+                    self.opponent_hole_cards,
+                    self.community_cards,
+                    state, events[0]['round_state'], 
+                    self.street, prob * self.prob_reach_this_node,
+                    self.my_strategy,
+                    self.my_player,
+                    copy_opponent,
+                    self.my_uuid,
+                    self.emulator,
+                    new_current_cost)
     
     def update_expected_table(self):
         if self.is_termial():
-            # start = time()
             gain = self.expected_gain(win_rate)
-            # print(time()-start)
-            # print(self.my_strategy)
             self.my_player.update_table(self.my_strategy, gain)
         else:
             actions = [x['action'] for x in self.emulator.generate_possible_actions(self.game_state)]

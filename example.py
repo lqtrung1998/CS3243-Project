@@ -3,7 +3,7 @@ from randomplayer import RandomPlayer
 from raise_player import RaisedPlayer
 from Player import MyPlayer
 #TODO:config the config as our wish
-config = setup_config(max_round=11, initial_stack=10000, small_blind_amount=10)
+config = setup_config(max_round=1, initial_stack=1000, small_blind_amount=10)
 
 
 
