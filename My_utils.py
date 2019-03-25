@@ -12,22 +12,22 @@ def simulation_with_opponent(cards, community_cards, opponent_cards):
 def estimate_hole_card_win_rate_with_opponent(nb_simulation, hole_card, community_card=None, opponent_cards = None):
     if not community_card: community_card = []
     win_count = sum([simulation_with_opponent(hole_card, community_card,opponent_cards) for _ in range(nb_simulation)])
-    return 1.0 * win_count / nb_simulation
+    return float(1.0 * win_count) / nb_simulation
 
 def hand_strength(cards, community_cards, opponent_cards = None):
     if opponent_cards == None:
         return hand_strength1(cards, community_cards)
     else:
-        nb_simulation = 10000
+        nb_simulation = 100
         return estimate_hole_card_win_rate_with_opponent(nb_simulation, cards, community_cards, opponent_cards)
         
 
 def hand_strength1(cards, community_cards):
-    nb_simulation = 10000
+    nb_simulation = 100
     return estimate_hole_card_win_rate(nb_simulation, 2, cards, community_cards)
 
 def win_rate(cards,community_cards,opp_cards):
-    nb_simulation = 10
+    nb_simulation = 100
 
     ahead = 0
     behind = 0
@@ -44,12 +44,12 @@ def win_rate(cards,community_cards,opp_cards):
         else:
             tied = tied + 1
 
-    return (ahead +tied/2)/(ahead +tied + behind)
+    return float((ahead +tied/2))/(ahead +tied + behind)
 
 def hand_strength_with_belief(my_cards, community_cards, belief):
     
     overall_strength = 0
-    nb_simulation = 10
+    nb_simulation = 100
 
     num_cards = len(belief['Cards'])
 
