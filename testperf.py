@@ -9,7 +9,9 @@ from argparse import ArgumentParser
 
 """ =========== *Remember to import your agent!!! =========== """
 from randomplayer import RandomPlayer
-from MyPlayer import EmulatorPlayer
+from raise_player import RaisedPlayer
+from bot1 import Bot1
+from GROUP48 import MyPlayer
 """ ========================================================= """
 
 """ Example---To run testperf.py with random warrior AI against itself. 
@@ -20,9 +22,9 @@ $ python testperf.py -n1 "Random Warrior 1" -a1 RandomPlayer -n2 "Random Warrior
 def testperf(agent_name1, agent1, agent_name2, agent2):		
 
 	# Init to play 500 games of 1000 rounds
-	num_game = 2
+	num_game = 5
 	max_round = 10
-	initial_stack = 10000
+	initial_stack = 1000
 	smallblind_amount = 10
 
 	# Init pot of players
@@ -32,22 +34,17 @@ def testperf(agent_name1, agent1, agent_name2, agent2):
 	# Setting configuration
 	config = setup_config(max_round=max_round, initial_stack=initial_stack, small_blind_amount=smallblind_amount)
 	
-	# Initialize Players
-	myplayer = EmulatorPlayer()
-	opponent = RandomPlayer()
-	myplayer.set_opponents_model(opponent)
-
 	# Register players
-	config.register_player(name=agent_name1, algorithm=RandomPlayer())
-	config.register_player(name=agent_name2, algorithm=RandomPlayer())
-	# config.register_player(name=agent_name1, algorithm=agent1())
-	# config.register_player(name=agent_name2, algorithm=agent2())
+	config.register_player(name=agent_name1, algorithm=Bot1())
+	config.register_player(name="Group 48", algorithm=MyPlayer())
+	# config.register_player(name=agent_name1, algorithm=agent1)
+	# config.register_player(name=agent_name2, algorithm=agent2)
 	
 
 	# Start playing num_game games
 	for game in range(1, num_game+1):
 		print("Game number: ", game)
-		game_result = start_poker(config, verbose=0)
+		game_result = start_poker(config, verbose=1)
 		agent1_pot = agent1_pot + game_result['players'][0]['stack']
 		agent2_pot = agent2_pot + game_result['players'][1]['stack']
 
@@ -66,14 +63,14 @@ def testperf(agent_name1, agent1, agent_name2, agent2):
 		print("\n Congratulations! " + agent_name1 + " has won.")
 		# print("\n Random Player has won!")
 	else:
-		Print("\n It's a draw!") 
+		print("\n It's a draw!") 
 
 
 def parse_arguments():
     parser = ArgumentParser()
     parser.add_argument('-n1', '--agent_name1', help="Name of agent 1", default="Your agent", type=str)
     parser.add_argument('-a1', '--agent1', help="Agent 1", default=RandomPlayer())    
-    parser.add_argument('-n2', '--agent_name2', help="Name of agent 2", default="Your agent", type=str)
+    parser.add_argument('-n2', '--agent_name2', help="Name of agent 2", default="Group 48", type=str)
     parser.add_argument('-a2', '--agent2', help="Agent 2", default=RandomPlayer())    
     args = parser.parse_args()
     return args.agent_name1, args.agent1, args.agent_name2, args.agent2

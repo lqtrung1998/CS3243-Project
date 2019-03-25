@@ -35,7 +35,7 @@ class Emulator(object):
         
         # Wrap the function with a timeout
         default_action_info      = ("fold",0)  # Fold
-        player.declare_action = timeout2(100,default_action_info)(player.declare_action)
+        player.declare_action = timeout2(10,default_action_info)(player.declare_action)
         
         self.players_holder[uuid] = player
 
@@ -65,6 +65,7 @@ class Emulator(object):
     def apply_action(self, game_state, action, bet_amount=0):
         if game_state["street"] == Const.Street.FINISHED:
             game_state, events = self._start_next_round(game_state)
+
         updated_state, messages = RoundManager.apply_action(game_state, action)
         events = [self.create_event(message[1]["message"]) for message in messages]
         events = [e for e in events if e]
