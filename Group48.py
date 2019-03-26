@@ -49,7 +49,7 @@ def get_hand_strength(hole, community_card):
     return hand_strength(hole, community_card)
 
 emulator = Emulator()
-emulator.set_game_rule(2,1,10,0)
+emulator.set_game_rule(2,1,20,0)
 
 
 
@@ -147,7 +147,7 @@ class Advisor():
                 probability[i] = float(6)/1325
             else:
                 probability[i] = float(16)/1325
-        strength = np.array(list(map(lambda x: heuristic(x.to_hole_card(),[]),unsuit_card)))
+        strength = np.array(list(map(lambda x: heuristic1(x.to_hole_card(),[]),unsuit_card)))
         sort_indices = np.argsort(strength)
         return { 'card':unsuit_card[sort_indices],
                   'strength':strength[sort_indices],
@@ -205,12 +205,13 @@ class Advisor():
         a_game_state = None
 
         pp =pprint.PrettyPrinter(indent =2)
-        for i in range(len(buckets)):
+        for i in range(len(buckets['strength'])):
             
             opp_card, strength, prob = buckets['card'][i] , buckets['strength'][i], buckets['probability'][i]
             opp_card = opp_card.to_hole_card()
-
+            
             game_state = setup_game_state(self.round_state, self.my_card, self.my_uuid, [])
+            #print(HandEvaluator.gen_hand_rank_info(self.my_card, game_state['table'].get_community_card()))
             # printGameState(game_state,self.my_uuid)
             if not a_game_state:
                 a_game_state = game_state
@@ -367,6 +368,7 @@ class MyPlayer(BasePokerPlayer):
         
 
     def receive_round_result_message(self, winners, hand_info, round_state):
+        #print(hand_info)
         pass
 
 
