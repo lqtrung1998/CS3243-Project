@@ -16,6 +16,7 @@ import itertools
 import numpy as np
 from time import time,sleep
 import pprint
+from CardProbability import CardDeck
 
 
 # In[ ]:
@@ -73,14 +74,14 @@ def heuristic1(hole, community_card, heuristic_weights=heuristic_weights):
     if HandEvaluator._HandEvaluator__is_straight(cards): score_vector[6]=1
     if HandEvaluator._HandEvaluator__is_threecard(cards): score_vector[5]=1
     if HandEvaluator._HandEvaluator__is_twopair(cards): score_vector[4]=1
-    if HandEvaluator._HandEvaluator__is_onepair(cards): 
+    if HandEvaluator._HandEvaluator__is_onepair(cards):
         if cards[0].rank >=10:
             score_vector[3]=1
         elif cards[0].rank >=6:
             score_vector[2]=1
         else:
             score_vector[1]=1
-            
+
     if cards and max(list(map(lambda x: x.rank,cards))) >=11:
         score_vector[0]=1
     return np.dot(heuristic_weights,score_vector)
@@ -88,7 +89,7 @@ def heuristic1(hole, community_card, heuristic_weights=heuristic_weights):
 def sigmoid(z):
     return 10000./(1+np.exp(-z))
 
-# heuristic = heuristic1 
+# heuristic = heuristic1
 heuristic = hand_strength
 
 def setup_game_state(round_state, my_hole_cards, my_uuid, opponent_hole_cards = []):
@@ -109,10 +110,12 @@ def setup_game_state(round_state, my_hole_cards, my_uuid, opponent_hole_cards = 
 class Advisor():
     def __init__(self, hole_card, my_uuid, weight):
 
+        self.cd = CardDeck()
+
         self.weight = weight
         self.round_state = None
         self.pay_off_table = {}
-        
+
         self.my_uuid = my_uuid
         self.my_card = gen_cards(hole_card)
         self.my_current_cost = 0
@@ -120,11 +123,23 @@ class Advisor():
         self.opp_statistics = {'raise': 0, 'call': 0, 'fold': 0}
 
         self.opp_belief = self.init_opp_belief()
-        
-    def update_my_belief(self, action):
-        pass
-    
-    def update_round_state(self,round_state):
+        self.community_card = None
+
+
+    def update_my_belief(self, round_state):
+        self.cd.update_deck(round_state['community_card'])
+        remove = []
+        for i in range(len(self.my_belief['card'])):
+            prob = self.cd.get_prob(self.my_belief['card'][i].ranks)
+            if prob[0] == 0 or prob[1] == 0:
+                remove.append(i)
+            else:
+                self.my_belief['probability'][i] = prob[0] + prob[1]
+                # print (self.my_belief['card'][i].ranks[0], self.my_belief['card'][i].ranks[1], prob[0], prob[1])
+        for item in ['card', 'probability', 'strength']:
+            self.my_belief[item] = np.delete(self.my_belief[item], remove)
+
+    def update_round_state(self, round_state):
         self.round_state = round_state
         ## Update opp_statistics
         prev_street = {'flop': 'preflop', 'turn':'flop', 'river': 'turn'}
@@ -138,9 +153,10 @@ class Advisor():
             self.opp_statistics[prev_opp_action] += 1
 
     def init_my_belief(self):
+        self.cd.update_deck([str(self.my_card[0]), str(self.my_card[1])])
         unsuit_rank = list(itertools.combinations_with_replacement(range(2,15),2))
         unsuit_card = np.array(list(map(lambda x: AbstractHoleCard([x[0],x[1]]),unsuit_rank)))
-        probability = np.ones(91) 
+        probability = np.ones(91)
         for i in range(len(unsuit_card)):
             hand = unsuit_card[i]
             if(hand.ranks[0]==hand.ranks[1]):
@@ -149,15 +165,15 @@ class Advisor():
                 probability[i] = float(16)/1325
         strength = np.array(list(map(lambda x: heuristic(x.to_hole_card(),[]),unsuit_card)))
         sort_indices = np.argsort(strength)
-        return { 'card':unsuit_card[sort_indices],
-                  'strength':strength[sort_indices],
-                  'probability':probability[sort_indices]
+        return { 'card'         :   unsuit_card[sort_indices],
+                  'strength'    :   strength[sort_indices],
+                  'probability' :   probability[sort_indices]
                 }
 
     def init_opp_belief(self):
         unsuit_rank = list(itertools.combinations_with_replacement(range(2,15),2))
         unsuit_card = np.array(list(map(lambda x: AbstractHoleCard([x[0],x[1]]),unsuit_rank)))
-        probability = np.zeros(91) 
+        probability = np.zeros(91)
         for i in range(len(unsuit_card)):
             hand = unsuit_card[i]
             if(hand.ranks[0]==hand.ranks[1]):
@@ -176,7 +192,7 @@ class Advisor():
         quantiles = QUANTILE
         # print(self.my_belief['strength'])
         quantile_values = list(map(lambda x: np.quantile(self.my_belief['strength'], x), quantiles))
-        
+
         for i in range(len(quantile_values) + 1):
             if i == 0:
                 curr_q = quantile_values[i]
@@ -186,27 +202,27 @@ class Advisor():
             else:
                 indices = np.where((self.my_belief['strength'] > curr_q) & (self.my_belief['strength'] <= quantile_values[i]))[0]
                 curr_q = quantile_values[i]
-            
+
             if len(indices) == 0:
                 continue
             bucketed_cards['card'] += [self.my_belief['card'][indices][len(indices) // 2]]
             bucketed_cards['strength'] += [np.mean(self.my_belief['strength'][indices])]
             bucketed_cards['probability'] += [np.sum(self.my_belief['probability'][indices])]
-            
+
         return bucketed_cards
 
-    
+
     def suggest_action(self):
         # s =time()
         buckets = self.get_bucket()
-        
+
         self.pay_off_table = {}
 
         a_game_state = None
 
         pp =pprint.PrettyPrinter(indent =2)
         for i in range(len(buckets)):
-            
+
             opp_card, strength, prob = buckets['card'][i] , buckets['strength'][i], buckets['probability'][i]
             opp_card = opp_card.to_hole_card()
 
@@ -214,19 +230,19 @@ class Advisor():
             # printGameState(game_state,self.my_uuid)
             if not a_game_state:
                 a_game_state = game_state
-            
+
             reasonable_opp = ReasonablePlayer(strength, self.weight ,self.opp_statistics, self.round_state['pot']['main']['amount']-self.my_current_cost)
-            
-            root = Node(game_state, self.round_state, self.my_card, game_state['table'].get_community_card(), opp_card, self.round_state['street'], 
+
+            root = Node(game_state, self.round_state, self.my_card, game_state['table'].get_community_card(), opp_card, self.round_state['street'],
                         prob, [], reasonable_opp, self, self.my_uuid, self.my_current_cost)
-            
+
             root.update_pay_off_table()
-        
+
         strategies = table_to_strategies(self.pay_off_table)
         # pp.pprint(strategies)
         strategy = max(strategies, key = strategies.get)
         action = strategy.split()[0]
-        
+
         histories = emulator.apply_action(a_game_state, action)[1][0]['round_state']['action_histories']
         if histories.get(self.round_state['street']):
             action_result = histories[self.round_state['street']][-1]
@@ -252,19 +268,19 @@ def printGameState(game_state,my_uuid):
 class AbstractHoleCard():
     def __init__(self, ranks):
         self.ranks = ranks
-        
+
     def from_hole_card(self, hole_card):
         card_ranks = []
         for card in hole_card:
             card_ranks.append(card.rank)
         return AbstractHoleCard(card_ranks)
-    
+
     def to_hole_card(self):
         SUITS = np.array([2,4,8,16])
         cards = []
         for rank in self.ranks:
             cards.append(Card(np.random.choice(SUITS,1), rank))
-        return cards        
+        return cards
 
 
 # In[118]:
@@ -331,9 +347,9 @@ class MyPlayer(BasePokerPlayer):
     def declare_action(self, valid_actions, hole_card, round_state):
         # print(hole_card)
         if round_state['street'] == 'preflop':
-            
+
             return self.preflop_action(hole_card, round_state)
-            
+
         self.advisor.update_round_state(round_state)
         #print(self.advisor.opp_statistics)
         return self.advisor.suggest_action()
@@ -348,10 +364,10 @@ class MyPlayer(BasePokerPlayer):
         elif my_strength >= 0.39:
             action = 'call'
         return action
-        
+
     def receive_game_start_message(self, game_info):
         self.my_uuid = [seat['uuid'] for seat in game_info['seats'] if seat['name']==self.name][0]
-        
+
     def receive_round_start_message(self, round_count, hole_card, seats):
         new_advisor =  Advisor(hole_card, self.my_uuid, self.weight)
         if self.advisor != None:
@@ -363,8 +379,8 @@ class MyPlayer(BasePokerPlayer):
 
     def receive_game_update_message(self, action, round_state):
         if action['player_uuid'] == self.my_uuid:
-            self.advisor.update_my_belief(action)
-        
+            self.advisor.update_my_belief(round_state)
+
 
     def receive_round_result_message(self, winners, hand_info, round_state):
         pass
@@ -375,20 +391,20 @@ class MyPlayer(BasePokerPlayer):
 
 class Node():
     def __init__(self, game_state, round_state, my_hole_card, community_card, opp_hole_card,
-                street, prob, my_path, reasonable_opp, advisor, my_uuid, current_cost = 0):        
+                street, prob, my_path, reasonable_opp, advisor, my_uuid, current_cost = 0):
         self.game_state = game_state
         self.round_state = round_state
         self.street = street
         self.depth = 1
         self.is_terminal = False
-        
+
         self.prob = prob
         self.my_path = my_path
         self.my_uuid = my_uuid
         self.advisor = advisor
         self.reasonable_opp = reasonable_opp
         self.current_cost = current_cost
-        
+
         self.players = game_state['table'].seats.players
         self.my_hole_card = my_hole_card
         self.community_card = community_card
@@ -396,9 +412,9 @@ class Node():
 
     def is_termial(self):
         return self.street != self.round_state['street'] or self.game_state['street'] == 5
-    
+
     def is_my_turn(self):
-        return self.round_state['seats'][self.round_state['next_player']]['uuid'] == self.my_uuid 
+        return self.round_state['seats'][self.round_state['next_player']]['uuid'] == self.my_uuid
 
     def perform_action(self, action, prob, is_my_player):
         state, events = emulator.apply_action(self.game_state, action)
@@ -406,7 +422,7 @@ class Node():
         new_current_cost = self.current_cost
         copy_opponent = self.reasonable_opp.copy_player()
 
-        if is_my_player: 
+        if is_my_player:
             if action != 'fold' and events[0]['round_state']['action_histories'][self.street][-1].get('paid') != None:
                 new_current_cost += events[0]['round_state']['action_histories'][self.street][-1]['paid']
 
@@ -427,7 +443,7 @@ class Node():
                     self.advisor,
                     self.my_uuid,
                     self.current_cost)
-    
+
     def update_pay_off_table(self):
         if self.is_termial():
             gain = self.expected_gain()
@@ -439,7 +455,7 @@ class Node():
         else:
             # print(self.is_my_turn(),self.my_path,self.game_state['street'])
             actions = [x['action'] for x in emulator.generate_possible_actions(self.game_state)]
-            if self.is_my_turn():       
+            if self.is_my_turn():
                 for action in actions:
                     child_node = self.perform_action(action, 1, True)
                     child_node.update_pay_off_table()
@@ -448,11 +464,11 @@ class Node():
 
                 if len(actions) < 3:
                     opponent_action_prob['call'] += opponent_action_prob['raise']
-                for action in actions:                 
+                for action in actions:
                     child_node = self.perform_action(action, opponent_action_prob[action], False)
                     child_node.update_pay_off_table()
-                    
-    def expected_gain(self):       
+
+    def expected_gain(self):
         pot = self.round_state['pot']['main']['amount']
         #print(self.street)
         #print(self.community_card)
@@ -467,9 +483,9 @@ class Node():
         # printGameState(self.game_state,self.my_uuid)
         return  (pot - self.current_cost) * self.prob * winrate - self.current_cost * self.prob * (1 - winrate)
 
-        
 
-   
+
+
 
 # In[120]:
 
@@ -486,7 +502,7 @@ def table_to_strategies(path_table):
     table = path_table.copy()
     strategies = path_table.copy()
     keys = list(table.keys())
-    
+
     for i in range(len(keys) - 1):
         key = keys[i]
         length = len(key)
@@ -494,7 +510,7 @@ def table_to_strategies(path_table):
             key1 = keys[j]
             if key1[:length] == key:
                 strategies[key1] += table[key]
-    
+
     for i in range(len(keys) - 1):
         key = keys[i]
         length = len(key)
@@ -505,4 +521,3 @@ def table_to_strategies(path_table):
                     del strategies[key]
 
     return strategies
-
