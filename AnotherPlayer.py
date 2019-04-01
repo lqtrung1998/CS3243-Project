@@ -141,7 +141,7 @@ class Advisor():
         for i in range(len(self.my_belief['card'])):
             prob = self.cd.get_prob(self.my_belief['card'][i].ranks)
             self.my_belief['probability'][i] = prob[0] * prob[1]
-            print (self.my_belief['card'][i].ranks[0], self.my_belief['card'][i].ranks[1], self.my_belief['probability'][i])
+            # print (self.my_belief['card'][i].ranks[0], self.my_belief['card'][i].ranks[1], self.my_belief['probability'][i])
             if self.my_belief['probability'][i] < self.prob_threshold:
                 remove.append(i)
         for item in ['card', 'probability', 'strength']:
@@ -167,10 +167,12 @@ class Advisor():
         probability = np.ones(91)
         for i in range(len(unsuit_card)):
             hand = unsuit_card[i]
-            if(hand.ranks[0]==hand.ranks[1]):
-                probability[i] = float(6)/1325
-            else:
-                probability[i] = float(16)/1325
+            # if(hand.ranks[0]==hand.ranks[1]):
+            #     probability[i] = float(6)/1325
+            # else:
+            #     probability[i] = float(16)/1325
+            prob = self.cd.get_prob(hand.ranks)
+            probability[i] = prob[0] * prob[1]
         strength = np.array(list(map(lambda x: heuristic(x.to_hole_card(),[]),unsuit_card)))
         sort_indices = np.argsort(strength)
         return { 'card'         :   unsuit_card[sort_indices],
