@@ -124,18 +124,26 @@ class Advisor():
 
         self.opp_belief = self.init_opp_belief()
         self.community_card = None
-
+        self.prev_community_card = []
+        self.prob_threshold = 0.005
 
     def update_my_belief(self, round_state):
-        self.cd.update_deck(round_state['community_card'])
+        # Find new community cards
+        prev = set(self.prev_community_card)
+        new_community_card = [x for x in round_state['community_card'] if x not in prev]
+
+        # Update deck with new community cards
+        self.cd.update_deck(new_community_card)
+        self.prev_community_card = round_state['community_card']
+
+        # Remove cards with low probability
         remove = []
         for i in range(len(self.my_belief['card'])):
             prob = self.cd.get_prob(self.my_belief['card'][i].ranks)
-            if prob[0] == 0 or prob[1] == 0:
+            self.my_belief['probability'][i] = prob[0] * prob[1]
+            print (self.my_belief['card'][i].ranks[0], self.my_belief['card'][i].ranks[1], self.my_belief['probability'][i])
+            if self.my_belief['probability'][i] < self.prob_threshold:
                 remove.append(i)
-            else:
-                self.my_belief['probability'][i] = prob[0] + prob[1]
-                # print (self.my_belief['card'][i].ranks[0], self.my_belief['card'][i].ranks[1], prob[0], prob[1])
         for item in ['card', 'probability', 'strength']:
             self.my_belief[item] = np.delete(self.my_belief[item], remove)
 
